@@ -12,6 +12,7 @@ public import Mathlib.SetTheory.Cardinal.Finite
 public import Mathlib.GroupTheory.Index
 public import Mathlib.GroupTheory.SchurZassenhaus
 public import Mathlib.Algebra.Group.Subgroup.Ker
+public import Mathlib.GroupTheory.Solvable
 
 /-!
 Project Two.
@@ -91,13 +92,6 @@ lemma in_powsubgroup (H : Type*) [CommGroup H] (p : ℕ) (x : H) :
 def PowSubgroup' (H : Type*) [CommGroup H] (p : ℕ) : Subgroup H :=
   (zpowGroupHom p).ker
 
-lemma what (H : Type*) [CommGroup H] (p : ℕ) (x : H) :
-    x ∈ PowSubgroup' H p ↔ x ^ p = 1 := by
-  constructor
-  · intro hx
-    sorry
-  · sorry
-
 /-
 Subgroup.comap f.toMonoidHom N is the pre-image of N under the map f.toMonoidHom.
 Have to do .toMonoidHom as f is actually a bundled structure which contains the
@@ -111,3 +105,48 @@ lemma powsubgroup_is_char (p : ℕ) : Subgroup.Characteristic (PowSubgroup H p) 
   intro f x ⟨y, hy, hyx⟩
   simp only [SetLike.mem_coe, in_powsubgroup] at hy ⊢
   rw [← hyx, ← map_pow, hy, map_one]
+
+-- There are different ways to say commutator of two subgroups and commutator of the
+-- actual group
+-- Need to see how to weaken solvability condition to just N being solvable
+-- Can do this in reality but need to think how to do in Lean
+theorem elementary_abelian {G : Type*} [Group G] [Finite G] {N : Subgroup G} [N.Normal]
+    [Group.IsSolvable G] (hNbot : N ≠ ⊥) (hNmin : ∀ K : Subgroup G, K ≤ N
+    → (K = ⊥) ∨ (K = N)) : ∃ p : ℕ, IsPGroup p G := by
+  have this1 : ⁅N, N⁆ < N := by
+    exact Group.IsSolvable.commutator_lt_of_ne_bot hNbot
+  have this2 : ⁅N, N⁆.Normal := by
+    exact Subgroup.commutator_normal N N
+  have this3 : ⁅N, N⁆ ≠ N := by
+    exact ne_of_lt this1
+  have this4 : ⁅N, N⁆ ≤ N := by
+    exact le_of_lt this1
+  have this5 : ⁅N, N⁆ = ⊥ ∨ ⁅N, N⁆ = N := by
+    exact hNmin ⁅N, N⁆ this4
+  have this6 : ⁅N, N⁆ = ⊥ := by
+    exact this5.resolve_right this3
+  have this7 : IsMulCommutative N := by
+    exact Subgroup.commutator_self_eq_bot_iff.1 this6
+  have this8 : CommGroup N := by
+    exact IsMulCommutative.instCommGroup
+  have this9 : ∃ p : ℕ, Nat.Prime p ∧ p ∣ Nat.card N := by
+    apply Nat.ne_one_iff_exists_prime_dvd.1
+    simp only [ne_eq, Subgroup.card_eq_one]
+    exact hNbot
+  rcases this9 with ⟨p, hpprime, hpdiv⟩
+  use p
+  sorry
+  -- Problem is that want PowSubgroup N p = N but the types don't match.
+  -- Also check instances IsMulCommutative N, and CommGroup N.
+
+#check Subgroup.card_mul_eq_card_subgroup_mul_card_quotient
+
+open Pointwise
+lemma solvable_ext_splits {G : Type*} [Group G] [Finite G] {N : Subgroup G} [N.Normal]
+    (h : (Nat.card N).Coprime (N.index)) : ∃ K : Subgroup G, G = (N * K : Set G) ∧ Disjoint N K
+    := by
+  rcases (Subgroup.exists_right_complement'_of_coprime h) with ⟨K, hK⟩
+  use K
+  constructor
+  · sorry
+  · exact hK.disjoint -- dot notation makes this very nice
