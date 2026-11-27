@@ -20,6 +20,7 @@ Project Two.
 
 @[expose] public section
 
+namespace basicDefs
 variable {s : Set ℕ} (G : Type*) [Group G]
 
 def IsPiNumber (s : Set ℕ) (n : ℕ) : Prop :=
@@ -62,29 +63,38 @@ lemma div_pi_num_is_pi_num {m n : ℕ} (hn : IsPiNumber s n) (hmn : m ∣ n) :
     IsPiNumber s m :=
   fun hp hpm ↦ hn hp (dvd_trans hpm hmn)
 
-variable {H : Type*} [CommGroup H]
-
-lemma mul_pow_is_one {p : ℕ} {a b : H} (ha : a ^ p = 1) (hb : b ^ p = 1) :
+lemma mul_pow_is_one {H : Type*} [CommGroup H] {p : ℕ} {a b : H} (ha : a ^ p = 1) (hb : b ^ p = 1) :
     (a * b) ^ p = 1 := by
   rw [mul_pow, ha, hb, one_mul]
 
-lemma inv_pow_is_one {p : ℕ} {a : H} (ha : a ^ p = 1) : a⁻¹ ^ p = 1 := by
+lemma inv_pow_is_one {H : Type*} [CommGroup H] {p : ℕ} {a : H} (ha : a ^ p = 1) : a⁻¹ ^ p = 1 := by
   rw [inv_pow, ha, inv_one]
 
-/-
-Went through a few iterations before could stop using Set.mem_Pred... . Broke off
-into helper lemmas. Do they exist already?
--/
 def PowSubgroup (H : Type*) [CommGroup H] (p : ℕ) : Subgroup H where
   carrier := {x | x ^ p = 1}
   one_mem' := by simp
   mul_mem' := fun ha hb ↦ mul_pow_is_one ha hb
   inv_mem' := fun ha ↦ inv_pow_is_one ha
 
+end basicDefs
+
+namespace otherStuff
+open basicDefs
+
+/-
+Went through a few iterations before could stop using Set.mem_Pred... . Broke off
+into helper lemmas. Do they exist already?
+-/
+
 @[simp]
-lemma in_powsubgroup (H : Type*) [CommGroup H] (p : ℕ) (x : H) :
-    x ∈ PowSubgroup H p ↔ x ^ p = 1 := by
+lemma in_powsubgroup {G : Type*} [CommGroup G] (p : ℕ) (x : G) :
+    x ∈ PowSubgroup G p ↔ x ^ p = 1 := by
   rfl
+
+@[simp]
+lemma pow_subgroup_not_bot_iff {G : Type*} [CommGroup G] (p : ℕ) :
+    PowSubgroup G p ≠ ⊥ ↔ ∃ x : PowSubgroup G p, x ≠ 1 := by
+  rw [Subgroup.ne_bot_iff_exists_ne_one]
 
 def PowSubgroup' (H : Type*) [CommGroup H] (p : ℕ) : Subgroup H :=
   (zpowGroupHom p).ker
@@ -97,27 +107,56 @@ f preserves multiplication.
 -/
 -- Make this an instance? Seems that's what happens in Mathlib
 -- zpowGroupHom
-lemma powsubgroup_is_char (p : ℕ) : Subgroup.Characteristic (PowSubgroup H p) := by
+-- instance makes its use automatic
+instance pow_subgroup_is_char (H : Type*) [CommGroup H] (p : ℕ) :
+    (PowSubgroup H p).Characteristic := by
   apply Subgroup.characteristic_iff_map_le.2
   intro f x ⟨y, hy, hyx⟩
   simp only [SetLike.mem_coe, in_powsubgroup] at hy ⊢
   rw [← hyx, ← map_pow, hy, map_one]
 
 /-- In a solvable group we have that any minimal normal subgroup is abelian. -/
-theorem min_norm_in_solv_is_comm {N : Subgroup G} [N.Normal]
-    [Group.IsSolvable G] (hNbot : N ≠ ⊥) (hNmin : ∀ K : Subgroup G, K ≤ N
+theorem min_norm_in_solv_is_comm {G : Type*} [Group G] {N : Subgroup G} [N.Normal]
+    [Group.IsSolvable G] (hNbot : N ≠ ⊥) (hNmin : ∀ K : Subgroup G, K.Normal → K ≤ N
     → (K = ⊥) ∨ (K = N)) : IsMulCommutative N := by
   refine Subgroup.commutator_self_eq_bot_iff.1 ?_
-  refine (hNmin ⁅N, N⁆ (Subgroup.commutator_le_self N)).resolve_right ?_
+  refine (hNmin ⁅N, N⁆ (Subgroup.commutator_normal N N)
+    (Subgroup.commutator_le_self N)).resolve_right ?_
   refine ne_of_lt <| Group.IsSolvable.commutator_lt_of_ne_bot hNbot
   -- check to see if can use dot notation
 
+lemma pow_subgr_divisor_not_bot {G : Type*} [Finite G] [CommGroup G] {p : ℕ} (h : p ∣ Nat.card G)
+    (hp : Nat.Prime p) : PowSubgroup G p ≠ ⊥ := by
+  -- Change which way round argument in PowSubgroup appear
+  let : Fact p.Prime := ⟨hp⟩
+  rcases exists_prime_orderOf_dvd_card' p h with ⟨x, hx⟩
+  rw [orderOf_eq_iff (hp.pos)] at hx
+  simp only [ne_eq, pow_subgroup_not_bot_iff, Subtype.exists, Subgroup.mk_eq_one, in_powsubgroup,
+    exists_prop]
+  use x
+  constructor
+  · exact hx.1
+  · rw [← pow_one x]
+    apply hx.2 1 (hp.one_lt) (zero_lt_one)
+
 /-- In a finite group we have that any non-trivial subgroup has order greater than 1. -/
-lemma non_triv_subgr_has_prime_div {H : Subgroup G} [Finite G] (h : H ≠ ⊥) :
+lemma non_triv_subgr_has_prime_div {G : Type*} [Group G] {H : Subgroup G} [Finite G] (h : H ≠ ⊥) :
     ∃ p : ℕ, Nat.Prime p ∧ p ∣ Nat.card H := by
   apply Nat.ne_one_iff_exists_prime_dvd.1
   simp only [ne_eq, Subgroup.card_eq_one]
   exact h
+
+-- Main problem is that need H in PowSubgroup H p to be instance of a CommGroup. But H also
+-- subgroup of G so Lean gets confused about which group structure to use.
+-- Instead of CommGroup N, saying IsMulCommutative N seems to avoid this.
+-- Can still use the fact that N is a CommGroup because of this open scoped.
+-- Don't really need this Lemma as now Lean can infer it as made PowSubgroup being
+-- characteristic an instance
+open scoped IsMulCommutative in
+lemma pow_subgroup_normal_in_larger_group {G : Type*} [Group G] [Finite G] (p : ℕ)
+    (N : Subgroup G) [N.Normal] [IsMulCommutative N] :
+    ((PowSubgroup N p).map N.subtype).Normal := ConjAct.normal_of_characteristic_of_normal
+
 
 -- There are different ways to say commutator of two subgroups and commutator of the
 -- actual group
@@ -125,26 +164,34 @@ lemma non_triv_subgr_has_prime_div {H : Subgroup G} [Finite G] (h : H ≠ ⊥) :
 -- Can do this in reality but need to think how to do in Lean
 open scoped IsMulCommutative in
 theorem elementary_abelian {G : Type*} [Group G] [Finite G] {N : Subgroup G} [N.Normal]
-    [Group.IsSolvable G] (hNbot : N ≠ ⊥) (hNmin : ∀ K : Subgroup G, K ≤ N
-    → (K = ⊥) ∨ (K = N)) : ∃ p : ℕ, IsPGroup p N := by
-  let : IsMulCommutative N := min_norm_in_solv_is_comm G hNbot hNmin
-  have this9 : ∃ p : ℕ, Nat.Prime p ∧ p ∣ Nat.card N := by
-    apply Nat.ne_one_iff_exists_prime_dvd.1
-    simp only [ne_eq, Subgroup.card_eq_one]
-    exact hNbot
-  rcases this9 with ⟨p, hpprime, hpdiv⟩
+    [Group.IsSolvable G] (hNbot : N ≠ ⊥) (hNmin : ∀ K : Subgroup G,
+    K.Normal → K ≤ N → (K = ⊥) ∨ (K = N)) : ∃ p : ℕ, IsPGroup p N := by
+  let : IsMulCommutative N := min_norm_in_solv_is_comm hNbot hNmin
+  rcases non_triv_subgr_has_prime_div hNbot with ⟨p, hpprime, hpdiv⟩
   use p
-  have : (PowSubgroup N p).map N.subtype = N := by -- maybe API for subtype of PowSubgroup
+  have : PowSubgroup N p ≠ ⊥ := by -- maybe API for subtype of PowSubgroup
+    exact pow_subgr_divisor_not_bot hpdiv hpprime
+  have : (PowSubgroup N p).map N.subtype ≠ ⊥ := by
+    rw [Subgroup.ne_bot_iff_exists_ne_one] at this ⊢
     sorry
+  have : (PowSubgroup N p).map N.subtype = N := by
+    apply (hNmin ((PowSubgroup N p).map N.subtype) (pow_subgroup_normal_in_larger_group p N) ?_).resolve_left
+    · sorry
+    · sorry
   have what : ∀ x : G, x ∈ N → x ^ p = 1 := by
     rw [← this]
     intro x hx
-    simp at hx
-    exact hx.1
+    simp only [Subgroup.mem_map, in_powsubgroup, Subgroup.subtype_apply, Subtype.exists,
+      SubmonoidClass.mk_pow, Subgroup.mk_eq_one, exists_and_left, exists_prop,
+      exists_eq_right_right] at hx
+    exact hx.1 -- Check coercions
   intro x
   use 1
   simp
-  sorry
+  have what1 : (x : G) ^ p = 1 := by
+    exact what x x.2
+  norm_cast at what1
+
   -- Problem is that want PowSubgroup N p = N but the types don't match.
   -- Also check instances IsMulCommutative N, and CommGroup N.
 
